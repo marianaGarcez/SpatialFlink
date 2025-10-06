@@ -1,0 +1,16 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {"name": "Sample High Risk Zone"},
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [4.350, 50.850], [4.360, 50.850], [4.360, 50.860], [4.350, 50.860], [4.350, 50.850]
+        ]]
+      }
+    }
+  ]
+}
+

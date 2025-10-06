@@ -39,9 +39,9 @@ under the License.
 
 	<repositories>
 		<repository>
-			<id>central.maven.org</id>
-			<name>Central Maven repository</name>
-			<url>http://central.maven.org/maven2</url>
+			<id>central</id>
+			<name>Maven Central</name>
+			<url>https://repo1.maven.org/maven2</url>
 			<snapshots>
 				<enabled>false</enabled>
 			</snapshots>
@@ -112,6 +112,13 @@ under the License.
 			<groupId>org.glassfish</groupId>
 			<artifactId>javax.json</artifactId>
 			<version>1.1</version>
+		</dependency>
+
+		<!-- CRS transformation -->
+		<dependency>
+			<groupId>org.locationtech.proj4j</groupId>
+			<artifactId>proj4j</artifactId>
+			<version>1.1.0</version>
 		</dependency>
 
 		<!-- Edited by Komal -->

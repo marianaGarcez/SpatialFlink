@@ -1,0 +1,16 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {"name": "Sample Maintenance Area"},
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [4.380, 50.850], [4.390, 50.850], [4.390, 50.860], [4.380, 50.860], [4.380, 50.850]
+        ]]
+      }
+    }
+  ]
+}
+
