@@ -41,7 +41,9 @@ public class InstrumentedMN_Q2 {
     /**
      * CSV parser for GPS events from real data file.
      */
-    public static class GpsEventParser implements CsvParseAndStamp.Parser<MnGpsEvent> {
+    public static class GpsEventParser implements CsvParseAndStamp.Parser<MnGpsEvent>, java.io.Serializable {
+        private static final long serialVersionUID = 1L;
+        
         @Override
         public MnGpsEvent parse(String line) throws Exception {
             String[] fields = line.trim().split(",");
@@ -60,19 +62,32 @@ public class InstrumentedMN_Q2 {
         }
     }
 
+    /**
+     * Serializable function to estimate VarOut result size for NES byte tracking.
+     */
+    public static class VarOutSizeEstimator implements java.util.function.ToIntFunction<VarianceWindowFn.VarOut>, java.io.Serializable {
+        private static final long serialVersionUID = 1L;
+        
+        @Override
+        public int applyAsInt(VarianceWindowFn.VarOut result) {
+            return result.toString().length() + 1; // +1 for newline
+        }
+    }
+
     public static void main(String[] args) throws Exception {
-        // Configuration parameters
+        // Configuration parameters - 20K EPS via TCP streaming
         long theoreticalRowsPerSec = Long.parseLong(System.getProperty("rows.per.sec", "20000"));
         int bytesPerInputRecord = Integer.parseInt(System.getProperty("bytes.per.input", "128"));
-        String inputFile = System.getProperty("input.file", "Data/selected_columns_df.csv");
+        String tcpHost = System.getProperty("tcp.host", "localhost");
+        int tcpPort = Integer.parseInt(System.getProperty("tcp.port", "32323"));
         String outputFile = System.getProperty("output.file", "metrics/mn_q2_instrumented_results.txt");
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
         env.setParallelism(1);
 
-        // PIPELINE STAGE 1: CSV parsing with ingest timestamp
-        DataStream<String> lines = env.readTextFile(inputFile)
+        // PIPELINE STAGE 1: TCP streaming source with 20K EPS target
+        DataStream<String> lines = env.socketTextStream(tcpHost, tcpPort)
                 .uid("pipe_0_source");
 
         DataStream<Stamped<MnGpsEvent>> parsed = lines
@@ -243,8 +258,7 @@ public class InstrumentedMN_Q2 {
                 .map(new CountingMap<Stamped<VarianceWindowFn.VarOut>>("11"))
                 .name("final-counting")
                 .uid("pipe_11_final")
-                .addSink(new CountingLatencyFileSink<>(outputFile, 
-                        (VarianceWindowFn.VarOut result) -> result.toString().length() + 1))
+                .addSink(new CountingLatencyFileSink<>(outputFile, new VarOutSizeEstimator()))
                 .name("instrumented-variance-sink")
                 .uid("pipe_99_sink");
 

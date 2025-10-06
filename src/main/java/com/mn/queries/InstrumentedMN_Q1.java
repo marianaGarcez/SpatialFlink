@@ -54,7 +54,9 @@ public class InstrumentedMN_Q1 {
     /**
      * CSV parser for GPS events from real data file.
      */
-    public static class GpsEventParser implements CsvParseAndStamp.Parser<MnGpsEvent> {
+    public static class GpsEventParser implements CsvParseAndStamp.Parser<MnGpsEvent>, java.io.Serializable {
+        private static final long serialVersionUID = 1L;
+        
         @Override
         public MnGpsEvent parse(String line) throws Exception {
             String[] fields = line.trim().split(",");
@@ -64,29 +66,40 @@ public class InstrumentedMN_Q1 {
             
             long timestamp = Long.parseLong(fields[0].trim()) * 1000L; // Convert to milliseconds
             String deviceId = fields[1].trim();
-            double lat = Double.parseDouble(fields[12].trim()); // gps_lat
-            double lon = Double.parseDouble(fields[13].trim()); // gps_lon
+            double gpsLat = Double.parseDouble(fields[12].trim());
+            double gpsLon = Double.parseDouble(fields[13].trim());
             
-            return new MnGpsEvent(deviceId, lon, lat, timestamp);
+            return new MnGpsEvent(deviceId, gpsLon, gpsLat, timestamp);
         }
     }
 
-    public static void main(String[] args) throws Exception {
-        // Configuration parameters
+    /**
+     * Serializable function to estimate CountOut result size for NES byte tracking.
+     */
+    public static class CountOutSizeEstimator implements java.util.function.ToIntFunction<CountOut>, java.io.Serializable {
+        private static final long serialVersionUID = 1L;
+        
+        @Override
+        public int applyAsInt(CountOut result) {
+            return result.toString().length() + 1; // +1 for newline
+        }
+    }    public static void main(String[] args) throws Exception {
+        // Configuration parameters - 20K EPS via TCP streaming
         long theoreticalRowsPerSec = Long.parseLong(System.getProperty("rows.per.sec", "20000"));
         int bytesPerInputRecord = Integer.parseInt(System.getProperty("bytes.per.input", "128")); // CSV line size estimate
+        String tcpHost = System.getProperty("tcp.host", "localhost");
+        int tcpPort = Integer.parseInt(System.getProperty("tcp.port", "32323"));
         double queryLon = Double.parseDouble(System.getProperty("query.lon", "4.3658"));
         double queryLat = Double.parseDouble(System.getProperty("query.lat", "50.6456"));
         double tolMeters = Double.parseDouble(System.getProperty("tolerance.meters", "100.0"));
-        String inputFile = System.getProperty("input.file", "Data/selected_columns_df.csv");
         String outputFile = System.getProperty("output.file", "metrics/mn_q1_instrumented_results.txt");
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
         env.setParallelism(1); // Single parallelism for easier metrics aggregation
 
-        // PIPELINE STAGE 1: CSV parsing with ingest timestamp
-        DataStream<String> lines = env.readTextFile(inputFile)
+        // PIPELINE STAGE 1: TCP streaming source with 20K EPS target
+        DataStream<String> lines = env.socketTextStream(tcpHost, tcpPort)
                 .uid("pipe_0_source");
 
         DataStream<Stamped<MnGpsEvent>> parsed = lines
@@ -209,8 +222,7 @@ public class InstrumentedMN_Q1 {
                 .map(new CountingMap<Stamped<CountOut>>("9"))
                 .name("final-counting")
                 .uid("pipe_9_final")
-                .addSink(new CountingLatencyFileSink<>(outputFile, 
-                        (CountOut result) -> result.toString().length() + 1)) // +1 for newline
+                .addSink(new CountingLatencyFileSink<>(outputFile, new CountOutSizeEstimator()))
                 .name("instrumented-file-sink")
                 .uid("pipe_99_sink");
 

@@ -42,7 +42,9 @@ public class InstrumentedMN_Q5 {
     /**
      * CSV parser for GPS events from real data file.
      */
-    public static class GpsEventParser implements CsvParseAndStamp.Parser<MnGpsEvent> {
+    public static class GpsEventParser implements CsvParseAndStamp.Parser<MnGpsEvent>, java.io.Serializable {
+        private static final long serialVersionUID = 1L;
+        
         @Override
         public MnGpsEvent parse(String line) throws Exception {
             String[] fields = line.trim().split(",");
@@ -59,11 +61,24 @@ public class InstrumentedMN_Q5 {
         }
     }
 
+    /**
+     * Serializable function to estimate TrajSpeedOut result size for NES byte tracking.
+     */
+    public static class TrajSpeedOutSizeEstimator implements java.util.function.ToIntFunction<TrajSpeedWindowFn.TrajSpeedOut>, java.io.Serializable {
+        private static final long serialVersionUID = 1L;
+        
+        @Override
+        public int applyAsInt(TrajSpeedWindowFn.TrajSpeedOut result) {
+            return result.toString().length() + 1; // +1 for newline
+        }
+    }
+
     public static void main(String[] args) throws Exception {
-        // Configuration parameters
+        // Configuration parameters - 20K EPS via TCP streaming
         long theoreticalRowsPerSec = Long.parseLong(System.getProperty("rows.per.sec", "20000"));
         int bytesPerInputRecord = Integer.parseInt(System.getProperty("bytes.per.input", "128"));
-        String inputFile = System.getProperty("input.file", "Data/selected_columns_df.csv");
+        String tcpHost = System.getProperty("tcp.host", "localhost");
+        int tcpPort = Integer.parseInt(System.getProperty("tcp.port", "32323"));
         String outputFile = System.getProperty("output.file", "metrics/mn_q5_instrumented_results.txt");
         double tolMeters = Double.parseDouble(System.getProperty("tolerance.meters", "0.001")); // degrees approximation
         
@@ -76,8 +91,8 @@ public class InstrumentedMN_Q5 {
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
         env.setParallelism(1);
 
-        // PIPELINE STAGE 1: CSV parsing with ingest timestamp
-        DataStream<String> lines = env.readTextFile(inputFile)
+        // PIPELINE STAGE 1: TCP streaming source with 20K EPS target
+        DataStream<String> lines = env.socketTextStream(tcpHost, tcpPort)
                 .uid("pipe_0_source");
 
         DataStream<Stamped<MnGpsEvent>> parsed = lines
@@ -287,8 +302,7 @@ public class InstrumentedMN_Q5 {
                 .map(new CountingMap<Stamped<TrajSpeedWindowFn.TrajSpeedOut>>("12"))
                 .name("final-counting")
                 .uid("pipe_12_final")
-                .addSink(new CountingLatencyFileSink<>(outputFile, 
-                        (TrajSpeedWindowFn.TrajSpeedOut result) -> result.toString().length() + 1))
+                .addSink(new CountingLatencyFileSink<>(outputFile, new TrajSpeedOutSizeEstimator()))
                 .name("instrumented-speed-sink")
                 .uid("pipe_99_sink");
 
